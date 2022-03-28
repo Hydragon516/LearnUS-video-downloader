@@ -11,7 +11,7 @@ from Crypto.Cipher import AES
 import requests
 import binascii
 
-search_title = ""
+search_url = ""
 video_title = ""
 id = ""
 pw = ""
@@ -30,7 +30,7 @@ class MyMainGUI(QDialog):
         self.pw_input.setEchoMode(QLineEdit.Password)
         
         self.search_input = QLineEdit(self)
-        self.music_list = QListWidget(self)
+        self.url_list = QListWidget(self)
 
         self.status_label = QLabel("", self)
 
@@ -39,7 +39,9 @@ class MyMainGUI(QDialog):
 
         self.url_label = QLabel("동영상 링크 : ", self)
 
-        self.youtube_button = QPushButton("동영상 다운로드")
+        self.title_label = QLabel("파일 제목 : ", self)
+        self.title_input = QLineEdit(self)
+        self.download_button = QPushButton("동영상 다운로드")
 
         id_box = QHBoxLayout()
         id_box.addWidget(self.id_label)
@@ -56,10 +58,12 @@ class MyMainGUI(QDialog):
         hbox.addStretch(1)
 
         hbox2 = QHBoxLayout()
-        hbox2.addWidget(self.music_list)
+        hbox2.addWidget(self.url_list)
 
         hbox3 = QHBoxLayout()
-        hbox3.addWidget(self.youtube_button)
+        hbox3.addWidget(self.title_label)
+        hbox3.addWidget(self.title_input)
+        hbox3.addWidget(self.download_button)
 
         vbox1 = QVBoxLayout()
         vbox1.addStretch(1)
@@ -75,7 +79,7 @@ class MyMainGUI(QDialog):
 
         self.setLayout(vbox1)
 
-        self.setWindowTitle('LearnUS Downloader (v1.0)')
+        self.setWindowTitle('LearnUS Downloader (v1.1)')
         self.setGeometry(300, 300, 500, 350)
 
 
@@ -87,15 +91,16 @@ class MyMain(MyMainGUI):
         super().__init__(parent)
 
         self.search_button.clicked.connect(self.search)
-        self.youtube_button.clicked.connect(self.download)
+        self.download_button.clicked.connect(self.download)
         self.github_button.clicked.connect(lambda: webbrowser.open('https://github.com/Hydragon516/Bugs-Music-Downloader'))
 
-        self.search_input.textChanged[str].connect(self.title_update)
+        self.search_input.textChanged[str].connect(self.url_update)
         
         self.id_input.textChanged[str].connect(self.id_update)
         self.pw_input.textChanged[str].connect(self.pw_update)
+        self.title_input.textChanged[str].connect(self.title_update)
         
-        self.music_list.itemClicked.connect(self.chkItemClicked)
+        self.url_list.itemClicked.connect(self.chkItemClicked)
 
         self.th_search = searcher(parent=self)
         self.th_search.updated_list.connect(self.list_update)
@@ -106,9 +111,9 @@ class MyMain(MyMainGUI):
 
         self.show()
     
-    def title_update(self, input):
-        global search_title
-        search_title = input
+    def url_update(self, input):
+        global search_url
+        search_url = input
     
     def id_update(self, input):
         global id
@@ -118,13 +123,17 @@ class MyMain(MyMainGUI):
         global pw
         pw = input
     
+    def title_update(self, input):
+        global video_title
+        video_title = input
+    
     def chkItemClicked(self) :
         global keyword
-        keyword = self.music_list.currentItem().text() 
+        keyword = self.url_list.currentItem().text() 
 
     @pyqtSlot()
     def search(self):
-        self.music_list.clear()
+        self.url_list.clear()
         self.th_search.start()
 
     @pyqtSlot()
@@ -133,7 +142,7 @@ class MyMain(MyMainGUI):
 
     @pyqtSlot(str)
     def list_update(self, msg):
-        self.music_list.addItem(msg)
+        self.url_list.addItem(msg)
     
     @pyqtSlot(str)
     def status_update(self, msg):
@@ -152,7 +161,7 @@ class searcher(QThread):
         self.wait()
 
     def run(self):
-        global search_title
+        global search_url
         global video_title
         global id
         global pw
@@ -160,7 +169,7 @@ class searcher(QThread):
 
         global segmanet_list
         
-        if search_title != "":
+        if search_url != "":
             chrome_ver = chromedriver_autoinstaller.get_chrome_version().split('.')[0]
             self.updated_label.emit("크롬 드라이버 버전 확인 완료! : {}".format(chrome_ver))
 
@@ -175,7 +184,7 @@ class searcher(QThread):
             self.updated_label.emit("서버에 접속하는 중...")
 
             try:
-                driver.get(url=search_title)
+                driver.get(url=search_url)
                 driver.implicitly_wait(time_to_wait=5)
 
                 self.updated_label.emit("LearnUS 로그인 시도 중...")
@@ -191,11 +200,8 @@ class searcher(QThread):
                 login_button.click()
 
                 self.updated_label.emit("동영상 정보 불러오는 중 ...")
-                driver.get(url=search_title)
+                driver.get(url=search_url)
                 driver.implicitly_wait(5)
-
-                video_title_info = driver.find_element_by_xpath('//*[@id="vod_header"]/h1')
-                video_title = (video_title_info.text.split('출석처리')[0])[:-6]
 
                 self.updated_label.emit("동영상 실행 중 ...")
                 play_button = driver.find_element_by_xpath('//*[@id="my-video"]/button/span[1]')
@@ -208,6 +214,8 @@ class searcher(QThread):
                 self.updated_label.emit("다운로드 가능한 링크 확인 중 ...")
                 network_logs = driver.execute_script("var performance = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance || {}; var network = performance.getEntries() || {}; return network;")
                 network_log_names = [x['name'] for x in network_logs]
+
+                segmanet_list.clear()
                 
                 for target_url in network_log_names:
                     if "v1-a1.ts" in target_url:
